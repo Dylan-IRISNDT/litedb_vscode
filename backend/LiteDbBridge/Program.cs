@@ -189,7 +189,11 @@ public static class Program
     private static void GetCollections(BridgeRequest request)
     {
         var db = GetDatabase(request.DbPath);
-        var names = db.GetCollectionNames().ToArray();
+        var names = db.GetCollectionNames()
+            // "_chunks" is LiteDB's internal FileStorage binary blob collection - browsing/querying
+            // it can load huge amounts of raw binary data and crash or hang the bridge process
+            .Where(name => !string.Equals(name, "_chunks", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
         WriteResponse(new BridgeResponse(true, Data: names));
     }
 
