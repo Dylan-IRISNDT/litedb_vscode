@@ -23,8 +23,8 @@ export class DotnetBridgeManager {
         if (!DotnetBridgeManager.outputChannel) {
             DotnetBridgeManager.outputChannel = vscode.window.createOutputChannel('LiteDB Bridge');
         }
-    this.dllPath = path.join(extensionPath, 'out', 'LiteDbBridge', 'LiteDbBridge.dll');
-    this.launch();
+        this.dllPath = path.join(extensionPath, 'out', 'LiteDbBridge', 'LiteDbBridge.dll');
+        this.launch();
     }
 
     private launch(): void {
@@ -54,6 +54,7 @@ export class DotnetBridgeManager {
             this.process.stderr.on('data', (chunk: string) => this.handleStderr(chunk));
         } catch (error) {
             this.log(`Failed to launch bridge: ${error}`, true);
+            this.handleError(error instanceof Error ? error : new Error(String(error)));
         }
     }
 
@@ -85,15 +86,7 @@ export class DotnetBridgeManager {
             this.currentReject = undefined;
         }
 
-        if (!this.restarting && !this.disposed) {
-            this.restarting = true;
-            setTimeout(() => {
-                if (!this.disposed) {
-                    this.launch();
-                }
-                this.restarting = false;
-            }, EXTENSION_CONSTANTS.BRIDGE_RESTART_DELAY);
-        }
+        this.scheduleRestart();
     }
 
     private handleError(error: Error): void {
@@ -120,6 +113,22 @@ export class DotnetBridgeManager {
             item.reject(failure);
         }
         this.queue = [];
+
+        this.scheduleRestart();
+    }
+
+    private scheduleRestart(): void {
+        if (this.restarting || this.disposed) {
+            return;
+        }
+
+        this.restarting = true;
+        setTimeout(() => {
+            this.restarting = false;
+            if (!this.disposed) {
+                this.launch();
+            }
+        }, EXTENSION_CONSTANTS.BRIDGE_RESTART_DELAY);
     }
 
     private handleStdout(chunk: string): void {
