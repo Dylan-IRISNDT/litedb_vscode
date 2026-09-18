@@ -8,6 +8,35 @@ import { escapeHtml } from './stringUtils';
 // Cache the HTML template
 let htmlTemplate: string | null = null;
 
+const JSON_PREVIEW_MAX_LENGTH = 60;
+
+// Parses a string as JSON if it represents an object/array (not a bare number, string, etc.)
+function tryParseJsonValue(value: string): unknown | undefined {
+    const trimmed = value.trim();
+    if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) {
+        return undefined;
+    }
+    try {
+        const parsed = JSON.parse(trimmed);
+        return typeof parsed === 'object' && parsed !== null ? parsed : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function truncateForPreview(text: string): string {
+    return text.length > JSON_PREVIEW_MAX_LENGTH
+        ? `${text.slice(0, JSON_PREVIEW_MAX_LENGTH)}...`
+        : text;
+}
+
+// Renders a JSON value as a truncated, clickable link that opens the full JSON in a new tab
+function renderJsonLink(jsonText: string): string {
+    const preview = escapeHtml(truncateForPreview(jsonText));
+    const fullJson = escapeHtml(jsonText);
+    return `<a href="#" class="json-link" data-json="${fullJson}" title="Click to view full JSON">${preview}</a>`;
+}
+
 function getHtmlTemplate(): string {
     if (!htmlTemplate) {
         const templatePath = path.join(__dirname, '..', '..', 'media', 'gridView.html');
@@ -102,9 +131,10 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
                 isReadonly = true; // BSON Date is readonly
                 displayValue = JSON.stringify(value);
             } else {
-                // Other objects (nested documents, arrays)
-                type = 'object';
-                displayValue = JSON.stringify(value);
+                // Other objects (nested documents, arrays) - rendered as a clickable JSON link
+                type = 'json';
+                isReadonly = true;
+                displayValue = renderJsonLink(JSON.stringify(value));
             }
         } else if (typeof value === 'number') {
             type = 'number';
@@ -113,8 +143,16 @@ function renderRow(row: Record<string, unknown>, columns: string[], index: numbe
             type = 'boolean';
             displayValue = String(value);
         } else {
-            // Strings and other primitive types
-            displayValue = escapeHtml(value);
+            const parsedJson = typeof value === 'string' ? tryParseJsonValue(value) : undefined;
+            if (parsedJson !== undefined) {
+                // A string column that actually contains JSON text
+                type = 'json';
+                isReadonly = true;
+                displayValue = renderJsonLink(String(value));
+            } else {
+                // Strings and other primitive types
+                displayValue = escapeHtml(value);
+            }
         }
 
         // Special handling for _id column - always readonly

@@ -321,8 +321,22 @@ async function openCollection(
             await refreshCollectionView(state.dbPath!, collection.name, panel);
         } else if (msg.command === 'updateCell' && msg.collection === collection.name) {
             await updateCell(state.dbPath!, collection.name, msg, panel);
+        } else if (msg.command === 'openJson') {
+            await openJsonInNewTab(msg.json);
         }
     });
+}
+
+async function openJsonInNewTab(json: string): Promise<void> {
+    let formatted = json;
+    try {
+        formatted = JSON.stringify(JSON.parse(json), null, 2);
+    } catch {
+        // Not parseable JSON (shouldn't happen); fall back to the raw text
+    }
+
+    const doc = await vscode.workspace.openTextDocument({ content: formatted, language: 'json' });
+    await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
 }
 
 async function refreshCollectionView(

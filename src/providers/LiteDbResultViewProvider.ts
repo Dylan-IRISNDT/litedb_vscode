@@ -23,6 +23,24 @@ export class LiteDbResultViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [vscode.Uri.file(path.join(this.extensionPath, 'media'))]
         };
         webviewView.webview.html = this._currentHtml;
+
+        webviewView.webview.onDidReceiveMessage(async (msg) => {
+            if (msg.command === 'openJson') {
+                await this.openJsonInNewTab(msg.json);
+            }
+        });
+    }
+
+    private async openJsonInNewTab(json: string): Promise<void> {
+        let formatted = json;
+        try {
+            formatted = JSON.stringify(JSON.parse(json), null, 2);
+        } catch {
+            // Not parseable JSON (shouldn't happen); fall back to the raw text
+        }
+
+        const doc = await vscode.workspace.openTextDocument({ content: formatted, language: 'json' });
+        await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
     }
 
     showResult(title: string, result: QueryResult): void {

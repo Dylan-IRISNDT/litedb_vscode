@@ -98,6 +98,28 @@ export class DotnetBridgeManager {
 
     private handleError(error: Error): void {
         this.log(`Bridge process error: ${error.message}`, true);
+
+        // spawn failed to start the process (e.g. missing dotnet runtime or bridge DLL) -
+        // reject the in-flight request and drain the queue so callers don't hang forever
+        this.process = null;
+
+        if (this.timeoutHandle) {
+            clearTimeout(this.timeoutHandle);
+            this.timeoutHandle = undefined;
+        }
+
+        const failure = new Error(`Bridge process failed to start: ${error.message}`);
+        if (this.currentReject) {
+            this.currentReject(failure);
+            this.currentResolve = undefined;
+            this.currentReject = undefined;
+        }
+        this.busy = false;
+
+        for (const item of this.queue) {
+            item.reject(failure);
+        }
+        this.queue = [];
     }
 
     private handleStdout(chunk: string): void {
@@ -151,9 +173,9 @@ export class DotnetBridgeManager {
         }
 
         return new Promise((resolve, reject) => {
-            this.queue.push({ 
-                payload, 
-                resolve, 
+            this.queue.push({
+                payload,
+                resolve,
                 reject,
                 timestamp: Date.now()
             });
@@ -162,7 +184,13 @@ export class DotnetBridgeManager {
     }
 
     private processQueue(): void {
-        if (this.busy || !this.process || this.queue.length === 0 || this.disposed) {
+        if (this.busy || this.queue.length === 0 || this.disposed) {
+            return;
+        }
+
+        if (!this.process) {
+            // No live process yet (e.g. mid-restart) - retry shortly instead of stalling forever
+            setTimeout(() => this.processQueue(), EXTENSION_CONSTANTS.RETRY_DELAY);
             return;
         }
 

@@ -130,7 +130,9 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "npm run compile",
+    "pretest": "npm run compile",
+    "test": "node --test out/**/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",
